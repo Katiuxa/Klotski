@@ -1,0 +1,30 @@
+{
+  "appId": "com.metamovidas.huarongdao",
+  "appName": "Huarongdao",
+  "webDir": "dist",
+  "backgroundColor": "#1a221e",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#1a221e",
+    "webContentsDebuggingEnabled": false,
+    "appendUserAgent": "HuarongdaoAndroid/1.0.5",
+    "adjustMarginsForEdgeToEdge": "disable"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 350,
+      "launchAutoHide": true,
+      "backgroundColor": "#1a221e",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER",
+      "showSpinner": false,
+      "splashFullScreen": false,
+      "splashImmersive": false
+    },
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "DARK",
+      "backgroundColor": "#00000000"
+    }
+  }
+}
