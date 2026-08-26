@@ -1,0 +1,23 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+node_modules
+dist
+dist-ssr
+dist-android
+*.local
+
+.vscode/*
+.idea
+.DS_Store
+
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/keystore/
+*.jks
+*.apk
+*.aab
