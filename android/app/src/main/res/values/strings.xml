@@ -4,4 +4,8 @@
     <string name="title_activity_main">Huarongdao</string>
     <string name="package_name">com.metamovidas.huarongdao</string>
     <string name="custom_url_scheme">com.metamovidas.huarongdao</string>
+    <string name="admob_app_id">ca-app-pub-8973581015975783~3628113148</string>
+    <string name="admob_banner_id">ca-app-pub-8973581015975783/5815292784</string>
+    <string name="admob_interstitial_id">ca-app-pub-8973581015975783/2261341955</string>
+    <string name="admob_rewarded_id">ca-app-pub-8973581015975783/8403973276</string>
 </resources>

@@ -3,18 +3,11 @@
 const fs = require("fs");
 const path = require("path");
 const sharp = require("sharp");
-const { Resvg } = require("@resvg/resvg-js");
 
 const ROOT = path.join(__dirname, "..");
+const PHOTO = path.join(ROOT, "resources", "icon-photo.jpg");
 const MASTER = path.join(ROOT, "resources", "icon-master.png");
-const FONT_CANDIDATES = [
-  "C:/Windows/Fonts/msyhbd.ttc",
-  "C:/Windows/Fonts/msyh.ttc",
-  "C:/Windows/Fonts/simhei.ttf",
-  "C:/Windows/Fonts/simsunb.ttf",
-  "C:/Windows/Fonts/simsun.ttc",
-  path.join(ROOT, "resources", "fonts", "NotoSansSC-Bold.otf"),
-];
+const LAUNCHER_BG = "#2c1814";
 
 function write(file) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -22,109 +15,151 @@ function write(file) {
   return file;
 }
 
-function findFont() {
-  for (const f of FONT_CANDIDATES) {
-    if (fs.existsSync(f)) return f;
+function circleMask(size) {
+  return Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">` +
+      `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="#fff"/>` +
+      `</svg>`
+  );
+}
+
+/** Cut the circular seal out of the studio photo (drop the grey field). */
+async function extractSeal(inputPath, size = 1024) {
+  const { data, info } = await sharp(inputPath)
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const { width: w, height: h, channels: c } = info;
+  const at = (x, y) => (y * w + x) * c;
+  const corners = [
+    [2, 2],
+    [w - 3, 2],
+    [2, h - 3],
+    [w - 3, h - 3],
+  ].map(([x, y]) => {
+    const i = at(x, y);
+    return [data[i], data[i + 1], data[i + 2]];
+  });
+  const bg = [0, 1, 2].map((k) => corners.reduce((s, p) => s + p[k], 0) / corners.length);
+  const dist = (i) => {
+    const dr = data[i] - bg[0];
+    const dg = data[i + 1] - bg[1];
+    const db = data[i + 2] - bg[2];
+    return Math.sqrt(dr * dr + dg * dg + db * db);
+  };
+
+  const cx = (w - 1) / 2;
+  const cy = (h - 1) / 2;
+  let maxR = 0;
+  const thresh = 26;
+  for (let y = 0; y < h; y += 2) {
+    for (let x = 0; x < w; x += 2) {
+      if (dist(at(x, y)) > thresh) {
+        const r = Math.hypot(x - cx, y - cy);
+        if (r > maxR) maxR = r;
+      }
+    }
   }
-  throw new Error("No CJK font found for icon rendering");
+  const r = Math.min(maxR + 1, Math.min(cx, cy));
+  const left = Math.max(0, Math.floor(cx - r));
+  const top = Math.max(0, Math.floor(cy - r));
+  const side = Math.max(2, Math.min(w - left, h - top, Math.ceil(r * 2)));
+
+  return sharp(inputPath)
+    .extract({ left, top, width: side, height: side })
+    .resize(size, size, { fit: "cover", kernel: sharp.kernel.lanczos3 })
+    .ensureAlpha()
+    .composite([{ input: circleMask(size), blend: "dest-in" }])
+    .png()
+    .toBuffer();
 }
 
-/** Crisp vector icon: red circle + 曹 (smaller, fully visible). */
-function renderMasterIcon(size = 1024) {
-  const font = findFont();
-  // Character ~45% of diameter + optical vertical centering so nothing clips
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024">
-  <circle cx="512" cy="512" r="500" fill="#A83228"/>
-  <text
-    x="512"
-    y="560"
-    text-anchor="middle"
-    font-family="Microsoft YaHei, Segoe UI, sans-serif"
-    font-size="340"
-    font-weight="700"
-    fill="#FAF6F0"
-  >曹</text>
-</svg>`;
-
-  const resvg = new Resvg(svg, {
-    fitTo: { mode: "width", value: size },
-    font: {
-      fontFiles: [font],
-      loadSystemFonts: true,
-      defaultFontFamily: "Microsoft YaHei",
+async function padded(buf, size, scale) {
+  const inner = Math.max(2, Math.round(size * scale));
+  const icon = await sharp(buf)
+    .resize(inner, inner, { fit: "contain", kernel: sharp.kernel.lanczos3 })
+    .png()
+    .toBuffer();
+  return sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
     },
-  });
-  return Buffer.from(resvg.render().asPng());
-}
-
-/** Foreground-only glyph for adaptive icon (safe zone). */
-function renderGlyphForeground(size = 1024) {
-  const font = findFont();
-  // Keep glyph inside Android adaptive safe zone (~66% center)
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024">
-  <text
-    x="512"
-    y="560"
-    text-anchor="middle"
-    font-family="Microsoft YaHei, Segoe UI, sans-serif"
-    font-size="280"
-    font-weight="700"
-    fill="#FAF6F0"
-  >曹</text>
-</svg>`;
-  const resvg = new Resvg(svg, {
-    fitTo: { mode: "width", value: size },
-    font: {
-      fontFiles: [font],
-      loadSystemFonts: true,
-      defaultFontFamily: "Microsoft YaHei",
-    },
-  });
-  return Buffer.from(resvg.render().asPng());
+  })
+    .composite([{ input: icon, gravity: "center" }])
+    .png()
+    .toBuffer();
 }
 
 async function iconAt(buf, size, file) {
-  await sharp(buf)
-    .resize(size, size, { fit: "cover", kernel: sharp.kernel.lanczos3 })
-    .png({ compressionLevel: 9 })
-    .toFile(write(file));
+  try {
+    await sharp(buf)
+      .resize(size, size, { fit: "cover", kernel: sharp.kernel.lanczos3 })
+      .png({ compressionLevel: 9 })
+      .toFile(write(file));
+  } catch (e) {
+    console.warn("skip", path.relative(ROOT, file), e.message);
+  }
+}
+
+/** Opaque square: Android 12 always circle-masks the splash icon. */
+async function splashIconSquare(sealBuf, size, scale, file) {
+  const inner = Math.max(2, Math.round(size * scale));
+  const icon = await sharp(sealBuf)
+    .resize(inner, inner, { fit: "contain", kernel: sharp.kernel.lanczos3 })
+    .png()
+    .toBuffer();
+  try {
+    await sharp({
+      create: {
+        width: size,
+        height: size,
+        channels: 3,
+        background: { r: 26, g: 34, b: 30 },
+      },
+    })
+      .composite([{ input: icon, gravity: "center" }])
+      .png({ compressionLevel: 9 })
+      .toFile(write(file));
+  } catch (e) {
+    console.warn("skip", path.relative(ROOT, file), e.message);
+  }
 }
 
 async function splashAt(iconBuf, w, h, file) {
-  // Clean dark field + crisp centered seal — no AI art
-  const iconSize = Math.round(Math.min(w, h) * 0.36);
+  const iconSize = Math.round(Math.min(w, h) * 0.32);
   const icon = await sharp(iconBuf)
     .resize(iconSize, iconSize, { fit: "contain", kernel: sharp.kernel.lanczos3 })
     .png()
     .toBuffer();
-  await sharp({
-    create: {
-      width: w,
-      height: h,
-      channels: 3,
-      background: { r: 26, g: 34, b: 30 },
-    },
-  })
-    .composite([{ input: icon, gravity: "center" }])
-    .png({ compressionLevel: 9 })
-    .toFile(write(file));
+  try {
+    await sharp({
+      create: {
+        width: w,
+        height: h,
+        channels: 3,
+        background: { r: 26, g: 34, b: 30 },
+      },
+    })
+      .composite([{ input: icon, gravity: "center" }])
+      .png({ compressionLevel: 9 })
+      .toFile(write(file));
+  } catch (e) {
+    console.warn("skip", path.relative(ROOT, file), e.message);
+  }
 }
 
 async function main() {
-  console.log("font:", findFont());
-  const master = renderMasterIcon(1024);
+  if (!fs.existsSync(PHOTO)) {
+    throw new Error("Missing " + path.relative(ROOT, PHOTO));
+  }
+
+  const master = await extractSeal(PHOTO, 1024);
   fs.mkdirSync(path.dirname(MASTER), { recursive: true });
   fs.writeFileSync(MASTER, master);
   console.log("resources/icon-master.png");
-
-  const glyph = renderGlyphForeground(1024);
-
-  await iconAt(master, 16, path.join(ROOT, "public", "favicon-16.png"));
-  await iconAt(master, 32, path.join(ROOT, "public", "favicon-32.png"));
-  await iconAt(master, 180, path.join(ROOT, "public", "apple-touch-icon.png"));
-  await iconAt(master, 512, path.join(ROOT, "public", "icon-512.png"));
   fs.copyFileSync(MASTER, path.join(ROOT, "resources", "icon-source.png"));
 
   const android = path.join(ROOT, "android", "app", "src", "main", "res");
@@ -133,7 +168,6 @@ async function main() {
     return;
   }
 
-  // Remove default Android vector foreground if present (causes robot logo)
   for (const p of [
     path.join(android, "drawable-v24", "ic_launcher_foreground.xml"),
     path.join(android, "drawable", "ic_launcher_foreground.xml"),
@@ -143,6 +177,9 @@ async function main() {
       console.log("removed", path.relative(ROOT, p));
     }
   }
+
+  // Adaptive safe zone is the inner ~66%; keep the gold rim visible.
+  const glyph = await padded(master, 1024, 0.72);
 
   const dens = [
     ["mipmap-mdpi", 48, 108],
@@ -157,28 +194,28 @@ async function main() {
     await iconAt(glyph, adaptive, path.join(android, folder, "ic_launcher_foreground.png"));
   }
 
-  // Also place high-res foreground in xxxhdpi-ish for splash animated icon
-  await iconAt(master, 288, path.join(android, "drawable", "splash_icon.png"));
-  await iconAt(master, 576, path.join(android, "drawable", "splash_icon_hd.png"));
+  // Keep the full gold rim inside Android's 2/3 splash mask.
+  await splashIconSquare(master, 288, 0.5, path.join(android, "drawable", "splash_icon.png"));
+  await splashIconSquare(master, 576, 0.5, path.join(android, "drawable", "splash_icon_hd.png"));
 
   fs.writeFileSync(
     path.join(android, "values", "ic_launcher_background.xml"),
     `<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#A83228</color>
+    <color name="ic_launcher_background">${LAUNCHER_BG}</color>
 </resources>
 `
   );
-  const adaptive = `<?xml version="1.0" encoding="utf-8"?>
+  const adaptiveXml = `<?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background"/>
     <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
 </adaptive-icon>
 `;
-  fs.writeFileSync(path.join(android, "mipmap-anydpi-v26", "ic_launcher.xml"), adaptive);
-  fs.writeFileSync(path.join(android, "mipmap-anydpi-v26", "ic_launcher_round.xml"), adaptive);
+  fs.mkdirSync(path.join(android, "mipmap-anydpi-v26"), { recursive: true });
+  fs.writeFileSync(path.join(android, "mipmap-anydpi-v26", "ic_launcher.xml"), adaptiveXml);
+  fs.writeFileSync(path.join(android, "mipmap-anydpi-v26", "ic_launcher_round.xml"), adaptiveXml);
 
-  // Clean solid splash screens (no AI render)
   await splashAt(master, 1280, 1280, path.join(android, "drawable", "splash.png"));
   await splashAt(master, 320, 480, path.join(android, "drawable-port-mdpi", "splash.png"));
   await splashAt(master, 480, 800, path.join(android, "drawable-port-hdpi", "splash.png"));
@@ -191,7 +228,7 @@ async function main() {
   await splashAt(master, 1920, 1080, path.join(android, "drawable-land-xxhdpi", "splash.png"));
   await splashAt(master, 2560, 1440, path.join(android, "drawable-land-xxxhdpi", "splash.png"));
 
-  console.log("icons + splash generated (vector)");
+  console.log("android launcher + splash generated from photo (web/game UI unchanged)");
 }
 
 main().catch((e) => {

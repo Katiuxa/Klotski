@@ -7,7 +7,7 @@
     "allowMixedContent": false,
     "backgroundColor": "#1a221e",
     "webContentsDebuggingEnabled": false,
-    "appendUserAgent": "HuarongdaoAndroid/1.0.5",
+    "appendUserAgent": "HuarongdaoAndroid/1.0.9",
     "adjustMarginsForEdgeToEdge": "disable"
   },
   "plugins": {
@@ -16,7 +16,7 @@
       "launchAutoHide": true,
       "backgroundColor": "#1a221e",
       "androidSplashResourceName": "splash",
-      "androidScaleType": "CENTER",
+      "androidScaleType": "CENTER_INSIDE",
       "showSpinner": false,
       "splashFullScreen": false,
       "splashImmersive": false
