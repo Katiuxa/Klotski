@@ -32,6 +32,12 @@ const dict = {
     reload: '华容道 — recargar',
     tabTutorial: 'Tutorial',
     tabLevel: 'Nivel {n}',
+    skipLevelAria: 'Saltar nivel viendo un anuncio',
+    skipLevelShort: 'Saltar<br>nivel',
+    skipConfirmTitle: '¿Pasar de nivel?',
+    skipConfirmBody: 'Puedes pasar al siguiente nivel a cambio de ver un anuncio. Este nivel no se marcará como completado. Solo una vez cada 24 horas.',
+    skipWatchAd: 'Ver anuncio',
+    skipCancel: 'Cancelar',
   },
   en: {
     tagline: 'Slide the red piece out through the bottom gate',
@@ -56,6 +62,12 @@ const dict = {
     reload: 'Huarongdao — reload',
     tabTutorial: 'Tutorial',
     tabLevel: 'Level {n}',
+    skipLevelAria: 'Skip level by watching an ad',
+    skipLevelShort: 'Skip<br>level',
+    skipConfirmTitle: 'Skip this level?',
+    skipConfirmBody: 'Watch an ad to move on to the next level. This level will not be marked as completed. Once every 24 hours.',
+    skipWatchAd: 'Watch ad',
+    skipCancel: 'Cancel',
   },
   fr: {
     tagline: 'Faites sortir la pièce rouge par la porte du bas',
@@ -80,6 +92,12 @@ const dict = {
     reload: 'Huarongdao — recharger',
     tabTutorial: 'Tutoriel',
     tabLevel: 'Niveau {n}',
+    skipLevelAria: 'Passer le niveau avec une pub',
+    skipLevelShort: 'Passer<br>niv.',
+    skipConfirmTitle: 'Passer ce niveau ?',
+    skipConfirmBody: 'Regardez une publicité pour passer au niveau suivant. Ce niveau ne sera pas marqué comme terminé. Une fois toutes les 24 heures.',
+    skipWatchAd: 'Voir la pub',
+    skipCancel: 'Annuler',
   },
   de: {
     tagline: 'Schiebe das rote Teil durch das untere Tor hinaus',
@@ -104,6 +122,12 @@ const dict = {
     reload: 'Huarongdao — neu laden',
     tabTutorial: 'Tutorial',
     tabLevel: 'Level {n}',
+    skipLevelAria: 'Level mit Werbung überspringen',
+    skipLevelShort: 'Skip<br>level',
+    skipConfirmTitle: 'Level überspringen?',
+    skipConfirmBody: 'Sieh dir eine Werbung an, um zum nächsten Level zu kommen. Dieses Level zählt nicht als geschafft. Einmal alle 24 Stunden.',
+    skipWatchAd: 'Werbung ansehen',
+    skipCancel: 'Abbrechen',
   },
   ru: {
     tagline: 'Выведите красную фигуру через нижнюю дверь',
@@ -128,12 +152,39 @@ const dict = {
     reload: 'Huarongdao — обновить',
     tabTutorial: 'Обучение',
     tabLevel: 'Уровень {n}',
+    skipLevelAria: 'Пропустить уровень за рекламу',
+    skipLevelShort: 'Skip<br>ур.',
+    skipConfirmTitle: 'Пропустить уровень?',
+    skipConfirmBody: 'Посмотрите рекламу, чтобы перейти к следующему уровню. Этот уровень не будет отмечен как пройденный. Раз в 24 часа.',
+    skipWatchAd: 'Смотреть',
+    skipCancel: 'Отмена',
   },
 }
 
 export function normalizeLang(code) {
   const c = String(code || '').toLowerCase().slice(0, 2)
   return dict[c] ? c : 'es'
+}
+
+export function detectLang() {
+  try {
+    const saved = localStorage.getItem(LS_LANG_KEY)
+    if (saved && dict[normalizeLang(saved)] && String(saved).slice(0, 2).toLowerCase() === normalizeLang(saved)) {
+      return normalizeLang(saved)
+    }
+  } catch { /* ignore */ }
+  const list = []
+  try {
+    if (navigator.languages) list.push(...navigator.languages)
+  } catch { /* ignore */ }
+  try {
+    if (navigator.language) list.push(navigator.language)
+  } catch { /* ignore */ }
+  for (const raw of list) {
+    const two = String(raw || '').slice(0, 2).toLowerCase()
+    if (dict[two]) return two
+  }
+  return 'es'
 }
 
 export function t(lang, key, vars = {}) {

@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { playMoveSound, playWinSound, unlockAudio, isMuted, toggleMuted } from './sounds'
-import { LANGS, LS_LANG_KEY, normalizeLang, t } from './i18n'
+import { LANGS, LS_LANG_KEY, detectLang, normalizeLang, t } from './i18n'
 import './styles.css'
 
 const BOARD_W = 4
 const BOARD_H = 5
 const LS_COMPLETED_KEY = 'klotski_completed_v1'
 const LS_LASTLEVEL_KEY = 'klotski_last_level_v1'
+const LS_SKIP_UNLOCK_KEY = 'klotski_skip_unlock_v1'
 
 function overlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
@@ -61,9 +62,9 @@ function asciiToBlocks(ascii) {
 }
 function levelFrom(spec) { return typeof spec === 'string' ? asciiToBlocks(spec) : clone(spec) }
 
-// ===== Tus niveles =====
+// ===== 30 niveles (1–4 se quedan; el resto ordenado por dificultad real) =====
 const LEVELS = [
-  // Nivel 1 – Tutorial
+  // 1 tutorial (~2)
   levelFrom(`
 SSSS
 SRRS
@@ -71,8 +72,7 @@ SRRS
 S..S
 S..S
 `),
-
-  // Nivel 2
+  // 2 (~8)
   levelFrom(`
 SSSS
 SRRS
@@ -80,8 +80,7 @@ SRRS
 SS.S
 S..S
 `),
-
-  // Nivel 3
+  // 3 (~29)
   levelFrom(`
 SRRS
 SRRS
@@ -89,8 +88,7 @@ SSSS
 SV.S
 SV.S
 `),
-
-  // Nivel 4
+  // 4 (~28)
   levelFrom(`
 SRRS
 VRRV
@@ -98,8 +96,55 @@ VSSV
 VSSV
 V..V
 `),
-
-  // Nivel 5
+  // 5 (~32)
+  levelFrom(`
+VRR.
+VRR.
+HHHH
+VSSS
+V..S
+`),
+  // 6 (~35)
+  levelFrom(`
+HHHH
+VRRV
+VRRV
+S..S
+SSSS
+`),
+  // 7 (~36)
+  levelFrom(`
+HHHH
+SRRS
+SRRS
+S..S
+HHHH
+`),
+  // 8 (~37)
+  levelFrom(`
+RR..
+RRHH
+VVHH
+VVSS
+SSSS
+`),
+  // 9 (~42)
+  levelFrom(`
+SRRS
+SRRS
+VHHV
+VSSV
+S..S
+`),
+  // 10 (~44)
+  levelFrom(`
+VRRV
+VHHV
+VSSV
+S..S
+SSSS
+`),
+  // 11 (~46)
   levelFrom(`
 SRRS
 SRRS
@@ -107,8 +152,7 @@ HHHH
 HHHH
 .HH.
 `),
-
-  // Nivel 6
+  // 12 (~47)
   levelFrom(`
 RRHH
 RRHH
@@ -116,89 +160,39 @@ SS..
 VVHH
 VVHH
 `),
-
-  // Nivel 7
+  // 13 (~48)
   levelFrom(`
-SRRS
-SRRS
-VVHH
-VVHH
-.HH.
-`),
-
-  // Nivel 8
-  levelFrom(`
-RRVV
-RRVV
+SSRR
+SSRR
 HHHH
-SHHS
-S..S
+V..S
+VSSS
 `),
-
-  // Nivel 9
+  // 14 (~53)
   levelFrom(`
 SRRS
-VRRV
-VVVV
-SVVS
+SRRS
+VVHH
+VVHH
 .HH.
 `),
-
-  // Nivel 10
+  // 15 (~56)
   levelFrom(`
-VRRS
-VRRS
+VVRR
+VVRR
 HHSS
-VHHV
-V..V
+HH..
+SSSS
 `),
-
-  // Nivel 11
+  // 16 (~59)
   levelFrom(`
-VRRS
-VRRS
-HHHH
-HHHH
-S..S
-`),
-
-  // Nivel 12
-  levelFrom(`
-VRRV
-VRRV
-VHHV
 VSSV
+VRRV
+SRRS
+HHHH
 S..S
 `),
-
-  // Nivel 13
-  levelFrom(`
-VRRV
-VRRV
-HHHH
-SV.S
-SV.S
-`),
-
-  // Nivel 14
-  levelFrom(`
-SRRS
-VRRV
-SV.V
-SV.S
-HHHH
-`),
-
-  // Nivel 15
-  levelFrom(`
-VRRS
-VRRS
-VSVV
-VSVV
-..HH
-`),
-
-  // Nivel 16
+  // 17 (~64)
   levelFrom(`
 VRRV
 VRRV
@@ -206,26 +200,140 @@ VHHS
 VSSS
 S..S
 `),
+  // 18 (~66)
+  levelFrom(`
+VRRS
+VRRS
+VSVV
+VSVV
+..HH
+`),
+  // 19 (~67)
+  levelFrom(`
+SSSS
+VRRV
+VRRV
+HHHH
+S..S
+`),
+  // 20 (~77)
+  levelFrom(`
+VRRS
+VRRS
+HHSS
+VHHV
+V..V
+`),
+  // 21 将拥曹营 (~78)
+  levelFrom(`
+VRRV
+VRRV
+HHHH
+S..S
+SSSS
+`),
+  // 22 (~80)
+  levelFrom(`
+VSSV
+VRRV
+VRRV
+HHHH
+S..S
+`),
+  // 23 齐头并进 (~85)
+  levelFrom(`
+VRRV
+VRRV
+SSSS
+VHHV
+V..V
+`),
+  // 24 指挥若定 (~88)
+  levelFrom(`
+RRVV
+RRVV
+HHSS
+V..V
+VSSV
+`),
+  // 25 (~89)
+  levelFrom(`
+RRVV
+RRVV
+HHHH
+SHHS
+S..S
+`),
+  // 26 (~100)
+  levelFrom(`
+SRRS
+VRRV
+VVVV
+SVVS
+.HH.
+`),
+  // 27 (~110)
+  levelFrom(`
+VRRV
+VRRV
+HHHH
+SV.S
+SV.S
+`),
+  // 28 (~114)
+  levelFrom(`
+VRRS
+VRRS
+HHHH
+HHHH
+S..S
+`),
+  // 29 横刀立马 (~116)
+  levelFrom(`
+VRRV
+VRRV
+VHHV
+VSSV
+S..S
+`),
+  // 30 (~131)
+  levelFrom(`
+SRRS
+VRRV
+SV.V
+SV.S
+HHHH
+`),
 ]
 
-function isLevelUnlocked(i, completed) {
+function isLevelUnlocked(i, completed, skipUnlockMax = 0) {
   if (i <= 0) return true
+  if (i <= skipUnlockMax) return true
   for (let j = 0; j < i; j++) {
     if (!completed.has(j)) return false
   }
   return true
 }
 
-function clampToUnlocked(i, completed) {
+function clampToUnlocked(i, completed, skipUnlockMax = 0) {
   const n = Number.isFinite(i) ? i : 0
   if (n < 0) return 0
-  if (isLevelUnlocked(n, completed)) return Math.min(n, LEVELS.length - 1)
+  if (isLevelUnlocked(n, completed, skipUnlockMax)) return Math.min(n, LEVELS.length - 1)
   let max = 0
   for (let j = 1; j < LEVELS.length; j++) {
-    if (isLevelUnlocked(j, completed)) max = j
+    if (isLevelUnlocked(j, completed, skipUnlockMax)) max = j
     else break
   }
   return max
+}
+
+function readSkipUnlockMax() {
+  try {
+    const n = parseInt(localStorage.getItem(LS_SKIP_UNLOCK_KEY), 10)
+    return Number.isFinite(n) && n > 0 ? n : 0
+  } catch {
+    return 0
+  }
 }
 
 export default function App() {
@@ -238,6 +346,7 @@ export default function App() {
   })
 
   // Restaurar último nivel (solo si está desbloqueado)
+  const [skipUnlockMax, setSkipUnlockMax] = useState(() => readSkipUnlockMax())
   const [levelIndex, setLevelIndex] = useState(() => {
     try {
       const raw = localStorage.getItem(LS_LASTLEVEL_KEY)
@@ -247,7 +356,7 @@ export default function App() {
         const rawC = localStorage.getItem(LS_COMPLETED_KEY)
         done = new Set(rawC ? JSON.parse(rawC) : [])
       } catch { /* ignore */ }
-      return clampToUnlocked(n, done)
+      return clampToUnlocked(n, done, readSkipUnlockMax())
     } catch {
       return 0
     }
@@ -257,17 +366,24 @@ export default function App() {
   const [moves, setMoves] = useState(0)
   const [won, setWon] = useState(false)
   const [soundOn, setSoundOn] = useState(() => !isMuted())
-  const [lang, setLang] = useState(() => {
-    try { return normalizeLang(localStorage.getItem(LS_LANG_KEY) || 'es') }
-    catch { return 'es' }
-  })
+  const [lang, setLang] = useState(() => detectLang())
   const [langOpen, setLangOpen] = useState(false)
   const [levelOpen, setLevelOpen] = useState(false)
+  const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
+  const [skipBusy, setSkipBusy] = useState(false)
+  const [skipAvailable, setSkipAvailable] = useState(() => {
+    try {
+      return !(window.GameAds && typeof window.GameAds.canSkipLevel === 'function') || window.GameAds.canSkipLevel()
+    } catch {
+      return true
+    }
+  })
 
   const boardRef = useRef(null)
   const dragInfo = useRef(null)
   const blocksRef = useRef(blocks)
   const winSoundPlayed = useRef(false)
+  const firstClearRef = useRef(false)
   const langMenuRef = useRef(null)
   const levelMenuRef = useRef(null)
   const [activeId, setActiveId] = useState(null)
@@ -276,8 +392,18 @@ export default function App() {
     blocksRef.current = blocks
   }, [blocks])
 
+  function refreshSkipAvailable() {
+    try {
+      if (window.GameAds && typeof window.GameAds.canSkipLevel === 'function') {
+        setSkipAvailable(!!window.GameAds.canSkipLevel())
+        return
+      }
+    } catch { /* ignore */ }
+    setSkipAvailable(true)
+  }
+
   function goToLevel(i) {
-    const next = clampToUnlocked(i, completed)
+    const next = clampToUnlocked(i, completed, skipUnlockMax)
     setLevelIndex(next)
   }
 
@@ -295,6 +421,34 @@ export default function App() {
     if (!nowMuted) playMoveSound()
   }
 
+  async function confirmSkipWithAd() {
+    if (skipBusy || levelIndex >= LEVELS.length - 1) return
+    setSkipBusy(true)
+    try {
+      let result = { ok: false, reason: 'unavailable' }
+      if (window.GameAds && typeof window.GameAds.showRewardedSkip === 'function') {
+        result = await window.GameAds.showRewardedSkip()
+      }
+      if (!result || !result.ok) {
+        refreshSkipAvailable()
+        setSkipBusy(false)
+        return
+      }
+      const nextIdx = Math.min(levelIndex + 1, LEVELS.length - 1)
+      const newMax = Math.max(skipUnlockMax, nextIdx)
+      setSkipUnlockMax(newMax)
+      try { localStorage.setItem(LS_SKIP_UNLOCK_KEY, String(newMax)) } catch { /* ignore */ }
+      setSkipConfirmOpen(false)
+      setWon(false)
+      setLevelIndex(nextIdx)
+      refreshSkipAvailable()
+    } catch {
+      refreshSkipAvailable()
+    } finally {
+      setSkipBusy(false)
+    }
+  }
+
   // Guardar el último nivel al cambiar
   useEffect(() => {
     try { localStorage.setItem(LS_LASTLEVEL_KEY, String(levelIndex)) } catch { /* ignore */ }
@@ -304,13 +458,38 @@ export default function App() {
     setMoves(0)
     setWon(false)
     winSoundPlayed.current = false
+    try {
+      if (window.GameAds && typeof window.GameAds.onMatchStart === "function") {
+        window.GameAds.onMatchStart({
+          level: levelIndex + 1,
+          alreadyCleared: completed.has(levelIndex)
+        })
+      }
+    } catch { /* ignore */ }
   }, [levelIndex])
+
+  useEffect(() => {
+    try {
+      if (window.GameAds && typeof window.GameAds.syncNoAdsFab === "function") {
+        window.GameAds.syncNoAdsFab()
+      }
+    } catch { /* ignore */ }
+    refreshSkipAvailable()
+  }, [])
+
+  useEffect(() => {
+    try {
+      if (window.GameAds && typeof window.GameAds.setPaused === "function") {
+        window.GameAds.setPaused(levelOpen || won || skipConfirmOpen)
+      }
+    } catch { /* ignore */ }
+  }, [levelOpen, won, skipConfirmOpen])
 
   // Si el progreso cambia y el nivel actual queda inválido, corregir
   useEffect(() => {
-    const safe = clampToUnlocked(levelIndex, completed)
+    const safe = clampToUnlocked(levelIndex, completed, skipUnlockMax)
     if (safe !== levelIndex) setLevelIndex(safe)
-  }, [completed]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [completed, skipUnlockMax]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Título de la pestaña + lang attr
   useEffect(() => {
@@ -322,7 +501,7 @@ export default function App() {
 
   // Cerrar menús al click fuera / Escape
   useEffect(() => {
-    if (!langOpen && !levelOpen) return
+    if (!langOpen && !levelOpen && !skipConfirmOpen) return
     function onDoc(e) {
       if (langOpen && langMenuRef.current && !langMenuRef.current.contains(e.target)) setLangOpen(false)
       if (levelOpen && levelMenuRef.current && !levelMenuRef.current.contains(e.target)) setLevelOpen(false)
@@ -331,6 +510,7 @@ export default function App() {
       if (e.key === 'Escape') {
         setLangOpen(false)
         setLevelOpen(false)
+        if (!skipBusy) setSkipConfirmOpen(false)
       }
     }
     document.addEventListener('pointerdown', onDoc)
@@ -339,7 +519,7 @@ export default function App() {
       document.removeEventListener('pointerdown', onDoc)
       document.removeEventListener('keydown', onKey)
     }
-  }, [langOpen, levelOpen])
+  }, [langOpen, levelOpen, skipConfirmOpen, skipBusy])
 
   // Detectar victoria y marcar completado
   useEffect(() => {
@@ -349,8 +529,10 @@ export default function App() {
         winSoundPlayed.current = true
         playWinSound()
       }
+      const firstClear = !completed.has(levelIndex)
+      firstClearRef.current = firstClear
       setWon(true)
-      if (!completed.has(levelIndex)) {
+      if (firstClear) {
         const next = new Set(completed)
         next.add(levelIndex)
         setCompleted(next)
@@ -358,6 +540,18 @@ export default function App() {
       }
     }
   }, [blocks]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!won) return
+    try {
+      if (window.GameAds && typeof window.GameAds.onMatchEnd === "function") {
+        window.GameAds.onMatchEnd({
+          level: levelIndex + 1,
+          firstClear: firstClearRef.current === true
+        })
+      }
+    } catch { /* ignore */ }
+  }, [won])
 
   function getThresholdPx() {
     const rect = boardRef.current?.getBoundingClientRect()
@@ -368,12 +562,14 @@ export default function App() {
 
   function onPointerDown(e, id) {
     unlockAudio()
+    e.preventDefault()
     e.currentTarget.setPointerCapture?.(e.pointerId)
     dragInfo.current = { id, startX: e.clientX, startY: e.clientY }
     setActiveId(id)
   }
   function onPointerMove(e) {
     if (!dragInfo.current) return
+    e.preventDefault()
     const { id, startX, startY } = dragInfo.current
     const dx = e.clientX - startX
     const dy = e.clientY - startY
@@ -418,6 +614,14 @@ export default function App() {
     setMoves(0)
     setWon(false)
     winSoundPlayed.current = false
+    try {
+      if (window.GameAds && typeof window.GameAds.onMatchStart === "function") {
+        window.GameAds.onMatchStart({
+          level: levelIndex + 1,
+          alreadyCleared: completed.has(levelIndex)
+        })
+      }
+    } catch { /* ignore */ }
   }
 
   const cells = useMemo(() => {
@@ -427,14 +631,16 @@ export default function App() {
     return arr
   }, [])
 
-  const canGoNext = levelIndex < LEVELS.length - 1 && isLevelUnlocked(levelIndex + 1, completed)
+  const canGoNext = levelIndex < LEVELS.length - 1 && isLevelUnlocked(levelIndex + 1, completed, skipUnlockMax)
   const canGoPrev = levelIndex > 0
+  const nextLocked = levelIndex < LEVELS.length - 1 && !isLevelUnlocked(levelIndex + 1, completed, skipUnlockMax)
+  const showSkipFab = nextLocked && skipAvailable && !won
 
   const optionLabel = (i) => {
     const num = i + 1
     const name = num === 1 ? t(lang, 'tutorial') : t(lang, 'levelN', { n: num })
     if (completed.has(i)) return `${name} ✓`
-    if (!isLevelUnlocked(i, completed)) return `${name} · ${t(lang, 'locked')}`
+    if (!isLevelUnlocked(i, completed, skipUnlockMax)) return `${name} · ${t(lang, 'locked')}`
     return name
   }
 
@@ -479,6 +685,7 @@ export default function App() {
           )}
         </div>
 
+        <div className="topbar-end hero-end">
         <button
           type="button"
           className="icon-btn"
@@ -498,6 +705,7 @@ export default function App() {
             </svg>
           )}
         </button>
+        </div>
       </div>
 
       <header className="header">
@@ -538,7 +746,7 @@ export default function App() {
           {levelOpen && (
             <ul className="level-menu" role="listbox" aria-label={t(lang, 'selectLevel')}>
               {LEVELS.map((_, i) => {
-                const unlocked = isLevelUnlocked(i, completed)
+                const unlocked = isLevelUnlocked(i, completed, skipUnlockMax)
                 return (
                   <li key={i}>
                     <button
@@ -642,7 +850,69 @@ export default function App() {
             })}
           </div>
         </div>
+
+        <div className="board-under">
+          {showSkipFab ? (
+            <button
+              type="button"
+              className="skip-level-fab"
+              aria-label={t(lang, 'skipLevelAria')}
+              title={t(lang, 'skipLevelAria')}
+              onClick={() => {
+                unlockAudio()
+                setLevelOpen(false)
+                setLangOpen(false)
+                setSkipConfirmOpen(true)
+              }}
+            >
+              <span className="skip-level-fab__txt" dangerouslySetInnerHTML={{ __html: t(lang, 'skipLevelShort') }} />
+            </button>
+          ) : (
+            <span className="board-under-spacer" aria-hidden="true" />
+          )}
+        </div>
       </div>
+
+      <AnimatePresence>
+        {skipConfirmOpen && (
+          <motion.div
+            className="modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => { if (!skipBusy) setSkipConfirmOpen(false) }}
+          >
+            <motion.div
+              className="modal-panel"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2>{t(lang, 'skipConfirmTitle')}</h2>
+              <p>{t(lang, 'skipConfirmBody')}</p>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={skipBusy}
+                  onClick={() => setSkipConfirmOpen(false)}
+                >
+                  {t(lang, 'skipCancel')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={skipBusy}
+                  onClick={confirmSkipWithAd}
+                >
+                  {skipBusy ? '…' : t(lang, 'skipWatchAd')}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {won && (
