@@ -26,14 +26,18 @@
 html, body, #root {
   height: 100%;
   margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
   font-family: var(--font-ui);
   color: var(--ink);
   background: var(--mist);
-  overflow-x: hidden;
+  overflow: hidden;
+  overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
+  touch-action: none;
 }
 
 /* Atmosphere — celadon mist + subtle lattice (not cream paper) */
@@ -75,8 +79,10 @@ body {
 }
 
 .container {
-  min-height: 100%;
-  min-height: 100dvh;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -90,17 +96,166 @@ body {
 .made {
   margin-top: auto;
   padding-top: 12px;
-  padding-bottom: 8px;
+  padding-bottom: calc(8px + var(--bottom-chrome, calc(var(--ad-banner-h, 0px) + var(--ad-safe-bottom, 0px))));
   font-size: 0.8rem;
   color: var(--ink-soft);
   opacity: 0.75;
   user-select: none;
   text-align: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .made .brand-meta {
   font-weight: 600;
   color: var(--jade);
+}
+
+.topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* App: keep credit visible above the fixed banner; shrink the board, not the menus. */
+html.android-app .container,
+html.is-native .container {
+  padding-top: max(2px, env(safe-area-inset-top, 0px));
+  padding-bottom: 6px;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  justify-content: flex-start;
+}
+
+html.android-app,
+html.is-native,
+html.android-app body,
+html.is-native body,
+html.android-app #root,
+html.is-native #root {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+html.android-app .level-menu,
+html.is-native .level-menu,
+html.android-app .lang-menu,
+html.is-native .lang-menu {
+  touch-action: pan-y;
+}
+
+html.android-app .topbar,
+html.is-native .topbar {
+  margin-top: max(2px, env(safe-area-inset-top, 0px));
+  min-height: 36px;
+  flex-shrink: 0;
+}
+
+html.android-app .header,
+html.is-native .header {
+  gap: 2px;
+  flex-shrink: 0;
+  animation: none;
+}
+
+html.android-app .brand-zh,
+html.is-native .brand-zh {
+  font-size: clamp(1.55rem, 5.2vw, 2rem);
+  letter-spacing: 0.22em;
+  margin-left: 0.22em;
+  line-height: 1.05;
+}
+
+html.android-app .brand-en,
+html.is-native .brand-en {
+  font-size: 0.65rem;
+  letter-spacing: 0.36em;
+  margin-left: 0.36em;
+  opacity: 0.68;
+}
+
+html.android-app .stats,
+html.is-native .stats {
+  gap: 6px 10px;
+  flex-shrink: 0;
+  animation: none;
+}
+
+html.android-app .controls,
+html.is-native .controls {
+  gap: 6px;
+  flex-shrink: 0;
+  animation: none;
+}
+
+html.android-app .btn,
+html.is-native .btn {
+  padding: 8px 12px;
+}
+
+html.android-app .btn-icon,
+html.is-native .btn-icon {
+  width: 38px;
+  height: 38px;
+}
+
+/* Pack board + skip toward the top; leave clear air above the native banner. */
+html.android-app .board-wrap,
+html.is-native .board-wrap {
+  flex: 0 1 auto;
+  min-height: 0;
+  width: min(460px, 100%);
+  max-width: min(460px, calc(100vw - 28px));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  margin-top: 2px;
+  animation: none;
+}
+
+html.android-app .board-frame,
+html.is-native .board-frame {
+  padding: 8px;
+}
+
+html.android-app .board,
+html.is-native .board {
+  width: 100%;
+  max-height: min(52dvh, calc(100dvh - 15.5rem));
+  aspect-ratio: 4 / 5;
+  margin: 0 auto;
+}
+
+html.android-app .board-under,
+html.is-native .board-under {
+  margin-top: 6px;
+  margin-bottom: 2px;
+  min-height: 40px;
+  flex-shrink: 0;
+}
+
+html.android-app .made,
+html.is-native .made {
+  display: block !important;
+  margin-top: 4px;
+  margin-bottom: 0;
+  padding-top: 2px;
+  padding-bottom: 4px;
+  font-size: 0.72rem;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+html.android-app .modal,
+html.is-native .modal {
+  padding-bottom: 16px;
 }
 
 /* Top bar: language + mute */
@@ -111,7 +266,9 @@ body {
   align-items: center;
   justify-content: space-between;
   min-height: 40px;
-  margin-top: 36px;
+  margin-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-left: 4px;
+  padding-right: 4px;
   z-index: 80;
   position: relative;
 }
@@ -360,14 +517,18 @@ body {
   left: 50%;
   transform: translateX(-50%);
   margin: 0;
-  padding: 6px 6px 0;
+  padding: 6px 4px 6px 6px;
   list-style: none;
   min-width: 200px;
   max-height: min(42vh, 260px);
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   scroll-snap-type: y proximity;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(42, 51, 47, 0.35) transparent;
   background:
     linear-gradient(rgba(238, 244, 240, 0.98) 30%, transparent),
     linear-gradient(transparent, rgba(238, 244, 240, 0.98) 70%) 0 100%,
@@ -383,12 +544,30 @@ body {
   z-index: 100;
 }
 
+.level-menu::-webkit-scrollbar {
+  width: 5px;
+}
+
+.level-menu::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+
+.level-menu::-webkit-scrollbar-thumb {
+  background: rgba(42, 51, 47, 0.28);
+  border-radius: 999px;
+}
+
+.level-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(42, 51, 47, 0.42);
+}
+
 .level-menu::after {
   content: '▾';
   position: sticky;
   bottom: 0;
   display: block;
-  margin: 0 -6px;
+  margin: 0 -4px 0 -6px;
   padding: 6px 0 8px;
   text-align: center;
   font-size: 0.7rem;
@@ -459,6 +638,58 @@ body {
   animation: rise-in 0.8s var(--ease-out) 0.2s both;
 }
 
+.board-under {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 0 2px;
+}
+
+.board-under-spacer {
+  width: 40px;
+  height: 40px;
+}
+
+.skip-level-fab {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  padding: 0.06rem 0.04rem;
+  border: 1px solid rgba(42, 51, 47, 0.18);
+  border-radius: 4px;
+  background: rgba(232, 239, 233, 0.72);
+  color: var(--ink-soft);
+  box-shadow: none;
+  font-family: var(--font-ui);
+  font-size: 0.42rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.08;
+  text-transform: uppercase;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  opacity: 0.85;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.skip-level-fab:hover {
+  background: rgba(232, 239, 233, 0.95);
+  border-color: rgba(42, 51, 47, 0.32);
+  opacity: 0.95;
+}
+
+.skip-level-fab:active {
+  transform: translateY(1px);
+}
+
+.skip-level-fab__txt {
+  display: block;
+  transform: translateY(0.5px);
+}
+
 .board-frame {
   padding: 10px;
   background: linear-gradient(145deg, #3a4540 0%, #2a332f 45%, #1f2824 100%);
@@ -489,6 +720,7 @@ body {
   border-radius: 3px;
   overflow: hidden;
   touch-action: none;
+  overscroll-behavior: none;
 }
 
 .grid {

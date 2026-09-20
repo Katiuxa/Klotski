@@ -3,6 +3,7 @@
 const LS_MUTE_KEY = 'klotski_muted_v1'
 
 let muted = false
+let adMuted = false
 try {
   muted = localStorage.getItem(LS_MUTE_KEY) === '1'
 } catch { /* ignore */ }
@@ -93,7 +94,7 @@ async function ensureReady() {
 }
 
 function playBuffer(buffer, gainVal = 1) {
-  if (muted || !buffer) return
+  if (muted || adMuted || !buffer) return
   const ac = getCtx()
   if (!ac || ac.state !== 'running') {
     ensureReady().then((ready) => {
@@ -136,8 +137,12 @@ export function toggleMuted() {
   return muted
 }
 
+export function muteForAd(on) {
+  adMuted = !!on
+}
+
 export function playMoveSound() {
-  if (muted) return
+  if (muted || adMuted) return
   if (moveBuf && ctx && ctx.state === 'running') {
     playBuffer(moveBuf, 0.9)
     return
@@ -146,7 +151,7 @@ export function playMoveSound() {
 }
 
 export function playWinSound() {
-  if (muted) return
+  if (muted || adMuted) return
   if (winBuf && ctx && ctx.state === 'running') {
     playBuffer(winBuf, 0.95)
     return
