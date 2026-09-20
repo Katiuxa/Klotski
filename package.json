@@ -1,8 +1,8 @@
 {
   "name": "huarongdao",
   "private": true,
-  "version": "1.0.5",
-  "androidVersionCode": 6,
+  "version": "1.0.33",
+  "androidVersionCode": 34,
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,9 @@
     "webzip": "npm run build && node scripts/pack-web.cjs"
   },
   "dependencies": {
+    "@capacitor-community/admob": "^7.2.0",
     "@capacitor/android": "^7.6.8",
+    "@capacitor/app": "^7.1.2",
     "@capacitor/core": "^7.6.8",
     "@capacitor/splash-screen": "^7.0.5",
     "@capacitor/status-bar": "^7.0.6",

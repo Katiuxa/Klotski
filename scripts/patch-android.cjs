@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 
 const ROOT = path.join(__dirname, "..");
 const ANDROID = path.join(ROOT, "android");
@@ -12,6 +13,32 @@ const APP_NAME = "Huarongdao";
 const PKG_JSON = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
 const VERSION_NAME = PKG_JSON.version || "1.0.0";
 const VERSION_CODE = Number(PKG_JSON.androidVersionCode) || 1;
+const PASS = "HuarongdaoMetamovidas2026!";
+
+function adsIdsFromConfig() {
+  const paths = [
+    path.join(ROOT, "public", "js", "ads-config.js"),
+    path.join(ROOT, "dist", "js", "ads-config.js"),
+    path.join(ROOT, "www", "js", "ads-config.js"),
+    path.join(ROOT, "con-publicidad", "ads-config.js")
+  ];
+  let s = "";
+  for (const p of paths) {
+    if (fs.existsSync(p)) {
+      s = fs.readFileSync(p, "utf8");
+      break;
+    }
+  }
+  const appId = ((s.match(/appId:\s*"([^"]+)"/) || [])[1] || "").trim();
+  const bannerId = ((s.match(/bannerId:\s*"([^"]+)"/) || [])[1] || "").trim();
+  const interstitialId = ((s.match(/interstitialId:\s*"([^"]+)"/) || [])[1] || "").trim();
+  const rewardedId = ((s.match(/rewardedId:\s*"([^"]+)"/) || [])[1] || "").trim();
+  const ready = appId.indexOf("~") !== -1
+    && appId.indexOf("PEGA") === -1
+    && bannerId.indexOf("/") !== -1
+    && bannerId.indexOf("PEGA") === -1;
+  return { appId, bannerId, interstitialId, rewardedId, ready };
+}
 
 function write(file, text) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -24,9 +51,81 @@ function patchLocalProperties() {
   write(path.join(ANDROID, "local.properties"), `sdk.dir=${sdk.replace(/\\/g, "/")}\n`);
 }
 
+function ensureKeystore() {
+  const dir = path.join(ANDROID, "keystore");
+  fs.mkdirSync(dir, { recursive: true });
+  const jks = path.join(dir, "huarongdao-upload.jks");
+  const props = path.join(ANDROID, "keystore.properties");
+  if (fs.existsSync(jks) && fs.existsSync(props)) return;
+
+  const javaHome = process.env.JAVA_HOME || "C:\\Program Files\\Android\\Android Studio\\jbr";
+  const keytool = path.join(javaHome, "bin", "keytool.exe");
+  const r = spawnSync(fs.existsSync(keytool) ? keytool : "keytool", [
+    "-genkeypair", "-v",
+    "-keystore", jks,
+    "-storetype", "JKS",
+    "-alias", "huarongdao",
+    "-keyalg", "RSA",
+    "-keysize", "2048",
+    "-validity", "10000",
+    "-storepass", PASS,
+    "-keypass", PASS,
+    "-dname", "CN=Huarongdao, OU=Metamovidas, O=Metamovidas, L=Madrid, C=ES"
+  ], { stdio: "inherit" });
+  if (r.status) throw new Error("keytool falló");
+  write(props, `storeFile=keystore/huarongdao-upload.jks
+storePassword=${PASS}
+keyAlias=huarongdao
+keyPassword=${PASS}
+`);
+  write(path.join(dir, "LEEEME.txt"), `GUARDA ESTE ARCHIVO Y huarongdao-upload.jks EN UN SITIO SEGURO.
+Sin esta clave no podrás actualizar la app en Google Play.
+
+Alias: huarongdao
+Contraseña: ${PASS}
+Paquete: ${PKG}
+`);
+}
+
 function patchGradle() {
   const appGradle = path.join(APP, "build.gradle");
   let s = fs.readFileSync(appGradle, "utf8");
+  if (!s.includes("keystore.properties")) {
+    s = s.replace(
+      "android {",
+      `def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new java.io.FileInputStream(keystorePropertiesFile))
+}
+
+android {`
+    );
+  }
+  if (!s.includes("signingConfigs")) {
+    s = s.replace(
+      "    buildTypes {",
+      `    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+                storeFile rootProject.file(keystoreProperties["storeFile"])
+                storePassword keystoreProperties["storePassword"]
+            }
+        }
+    }
+    buildTypes {`
+    );
+  }
+  if (!s.includes("signingConfig signingConfigs.release")) {
+    s = s.replace(
+      /release \{\s*minifyEnabled false/,
+      `release {
+            minifyEnabled false
+            signingConfig signingConfigs.release`
+    );
+  }
   s = s.replace(/versionCode \d+/, "versionCode " + VERSION_CODE);
   s = s.replace(/versionName "[^"]+"/, 'versionName "' + VERSION_NAME + '"');
   s = s.replace(/namespace "[^"]+"/, `namespace "${PKG}"`);
@@ -43,7 +142,49 @@ function patchStrings() {
   s = s.replace(/<string name="title_activity_main">[^<]+<\/string>/, `<string name="title_activity_main">${APP_NAME}</string>`);
   s = s.replace(/<string name="package_name">[^<]+<\/string>/, `<string name="package_name">${PKG}</string>`);
   s = s.replace(/<string name="custom_url_scheme">[^<]+<\/string>/, `<string name="custom_url_scheme">${PKG}</string>`);
+  const ads = adsIdsFromConfig();
+  const appId = ads.ready ? ads.appId : "PEGA_AQUI_EL_APP_ID_DE_ESTE_JUEGO";
+  const bannerId = ads.ready ? ads.bannerId : "PEGA_AQUI_EL_BANNER_ID_DE_ESTE_JUEGO";
+  const interstitialId = (ads.interstitialId && ads.interstitialId.indexOf("/") !== -1 && ads.interstitialId.indexOf("PEGA") === -1)
+    ? ads.interstitialId
+    : "PEGA_AQUI_EL_INTERSTITIAL_ID_DE_ESTE_JUEGO";
+  const rewardedId = (ads.rewardedId && ads.rewardedId.indexOf("/") !== -1 && ads.rewardedId.indexOf("PEGA") === -1)
+    ? ads.rewardedId
+    : "";
+  function upsert(name, value) {
+    const re = new RegExp('<string name="' + name + '">[^<]*</string>');
+    if (re.test(s)) {
+      s = s.replace(re, '<string name="' + name + '">' + value + '</string>');
+    } else {
+      s = s.replace("</resources>", '    <string name="' + name + '">' + value + '</string>\n</resources>');
+    }
+  }
+  upsert("admob_app_id", appId);
+  upsert("admob_banner_id", bannerId);
+  upsert("admob_interstitial_id", interstitialId);
+  if (rewardedId) upsert("admob_rewarded_id", rewardedId);
   fs.writeFileSync(file, s);
+  console.log("edit android/app/src/main/res/values/strings.xml (AdMob ids from ads-config)");
+}
+
+function patchManifest() {
+  const file = path.join(SRC, "AndroidManifest.xml");
+  if (!fs.existsSync(file)) return;
+  let s = fs.readFileSync(file, "utf8");
+  if (!s.includes("android.permission.ACCESS_NETWORK_STATE")) {
+    s = s.replace(
+      '<uses-permission android:name="android.permission.INTERNET" />',
+      '<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />'
+    );
+  }
+  if (!s.includes("com.google.android.gms.ads.APPLICATION_ID")) {
+    s = s.replace(
+      /(<application[\s\S]*?>)/,
+      `$1\n\n        <!-- AdMob App ID. Must use "~", not "/". -->\n        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="@string/admob_app_id" />`
+    );
+  }
+  fs.writeFileSync(file, s);
+  console.log("edit android/app/src/main/AndroidManifest.xml");
 }
 
 function patchStyles() {
@@ -88,51 +229,17 @@ function patchStyles() {
 }
 
 function patchMainActivity() {
-  const dir = path.join(SRC, "java", "com", "metamovidas", "huarongdao");
-  write(path.join(dir, "MainActivity.java"), `package com.metamovidas.huarongdao;
-
-import android.graphics.Color;
-import android.os.Bundle;
-import android.view.View;
-import android.view.WindowManager;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
-import com.getcapacitor.BridgeActivity;
-
-public class MainActivity extends BridgeActivity {
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
-        // Edge-to-edge; status may overlay, nav bar must not cover content.
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        getWindow().setStatusBarColor(Color.TRANSPARENT);
-        getWindow().setNavigationBarColor(Color.parseColor("#1a221e"));
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-
-        WindowInsetsControllerCompat bars =
-            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        if (bars != null) {
-            bars.setAppearanceLightStatusBars(false);
-            bars.setAppearanceLightNavigationBars(false);
-        }
-
-        final View root = findViewById(android.R.id.content);
-        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
-            Insets nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars());
-            Insets cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
-            int bottom = Math.max(nav.bottom, cutout.bottom);
-            // Native bottom padding so system nav never covers the WebView / credit.
-            v.setPadding(0, 0, 0, bottom);
-            return insets;
-        });
-        ViewCompat.requestApplyInsets(root);
-    }
-}
-`);
+  const file = path.join(SRC, "java", "com", "metamovidas", "huarongdao", "MainActivity.java");
+  if (!fs.existsSync(file)) {
+    console.error("MainActivity.java missing — " + file);
+    process.exit(1);
+  }
+  const src = fs.readFileSync(file, "utf8");
+  if (src.includes("AdView") || src.includes("setPlayAds") || src.includes("AdsManager")) {
+    console.log("keep MainActivity.java (already has AdView/setPlayAds)");
+    return;
+  }
+  console.warn("MainActivity.java missing native banner — leaving as-is");
 }
 
 function main() {
@@ -141,8 +248,10 @@ function main() {
     process.exit(1);
   }
   patchLocalProperties();
+  ensureKeystore();
   patchGradle();
   patchStrings();
+  patchManifest();
   patchStyles();
   patchMainActivity();
   console.log(`patched Huarongdao Android ${VERSION_NAME} (${VERSION_CODE})`);

@@ -1,18 +1,25 @@
-# Klotski (华容道 · Huarongdao)
+# Klotski / Huarongdao
 
-Web (Vite + React) y Android (Capacitor). Paquete `com.metamovidas.huarongdao`.
+Puzle de bloques deslizantes.
 
-**Jugar:** https://katiuxa.github.io/Klotski/
+## Web
 
-La barra de navegación de Android no cubre el tablero: `MainActivity` aplica padding con `WindowInsets`.
+https://katiuxa.github.io/Klotski/
+
+Fuentes en `src/`. GitHub Pages las compila con Vite.
 
 ```bash
-# web
 npm ci
 npm run dev
+```
 
-# android
+## Android
+
+Capacitor en `android/`. Versión **1.0.33**.
+
+```bash
+npm ci
 npm run apk
 ```
 
-Keystore fuera de git.
+Keystore de Play Store fuera de git.
