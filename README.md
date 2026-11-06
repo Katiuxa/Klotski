@@ -4,9 +4,9 @@ Puzle de bloques deslizantes.
 
 ## Web
 
-https://katiuxa.github.io/Klotski/
+https://huarongdaoklotski.vercel.app
 
-Fuentes en `src/`. GitHub Pages las compila con Vite.
+Fuentes en `src/`.
 
 ```bash
 npm ci
